@@ -1,0 +1,100 @@
+pipeline {
+    agent any
+
+    environment {
+        REPO_URL = "https://github.com/Franckponvet/grpc.git"
+        TAR_PATH = "\"C:\\Program Files\\Git\\usr\\bin\\tar.exe\""
+    }
+
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                bat '''
+                echo Cleaning workspace...
+                if exist grpc (
+                    echo Deleting grpc folder...
+                    rmdir /s /q grpc
+                ) else (
+                    echo grpc folder does not exist, skipping removal.
+                )
+                '''
+            }
+        }
+
+        stage('Clone RepoA') {
+            steps {
+                bat 'git clone %REPO_URL% grpc'
+            }
+        }
+
+        stage('Install Doxygen') {
+            steps {
+                bat 'choco install doxygen.install -y || echo "Doxygen already installed"'
+            }
+        }
+
+        stage('Generate & Modify Doxygen Config') {
+            steps {
+                bat '''
+                cd grpc
+                doxygen -g Doxyfile
+                powershell -Command "(Get-Content Doxyfile) -replace 'INPUT                  = .*', 'INPUT = src' | Set-Content Doxyfile"
+                powershell -Command "(Get-Content Doxyfile) -replace 'GENERATE_HTML          = NO', 'GENERATE_HTML = YES' | Set-Content Doxyfile"
+                powershell -Command "(Get-Content Doxyfile) -replace 'WARNINGS               = NO', 'WARNINGS = YES' | Set-Content Doxyfile"
+                powershell -Command "(Get-Content Doxyfile) -replace 'WARN_LOGFILE           =', 'WARN_LOGFILE = doxygen.log' | Set-Content Doxyfile"
+                '''
+            }
+        }
+
+        stage('Run Doxygen') {
+            steps {
+                bat '''
+                cd grpc
+                doxygen Doxyfile
+                if exist doxygen.log (
+                    echo  doxygen.log successfully created
+                ) else (
+                    echo  ERROR: doxygen.log was NOT created!
+                    exit 1
+                )
+                if exist html (
+                    echo  HTML documentation successfully generated
+                ) else (
+                    echo  ERROR: HTML documentation was NOT generated!
+                    exit 1
+                )
+                '''
+            }
+        }
+
+        stage('Pack Documentation') {
+            steps {
+                bat '''
+                cd grpc
+                if exist html (
+                    echo Packing documentation...
+                    %TAR_PATH% -czf doc.tar.gz html/
+                ) else (
+                    echo  ERROR: HTML folder missing! Check Doxygen settings.
+                    exit 1
+                )
+                '''
+            }
+        }
+
+        stage('Archive Documentation') {
+            steps {
+                archiveArtifacts artifacts: 'grpc/doc.tar.gz', fingerprint: true
+            }
+        }
+    }
+
+    post {
+        failure {
+            echo " PipelineB Failed. Check logs."
+        }
+        success {
+            echo " PipelineB Completed Successfully!"
+        }
+    }
+}
