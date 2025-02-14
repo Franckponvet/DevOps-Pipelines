@@ -1,0 +1,79 @@
+## **1. How did you test your pipelines?**
+To test my Jenkins pipelines, I followed these steps:
+
+1. **Ran PipelineB first** to verify:
+   - The repository (`RepoA`) clones successfully.
+   - Doxygen generates documentation (`html`).
+   - The documentation is correctly packed into `doc.tar.gz`.
+   - Artifacts are archived properly.
+
+2. **Extended PipelineC and tested**:
+   - Modified Doxygen config to **enable warnings (`doxygen.log`)**.
+   - Verified `doxygen.log` was created.
+   - Ensured **RepoC (DoxygenLogParser)** was cloned successfully.
+   - Ran `parser.py` to **extract warnings into CSV format**.
+   - Checked if `warnings.csv` contained the expected data.
+
+3. **Checked final artifacts in Jenkins**:
+   - Ensured `doc.tar.gz` exists.
+   - Verified the correct logs are stored in Jenkins workspace.
+   - Inspected console output to confirm no missing steps.
+
+---
+
+## **2. How did you test RepoC (Doxygen Log Parser)?**
+I tested `parser.py` using the following steps:
+
+1. **Unit Testing with Sample Logs**:
+   - Created a sample `doxygen.log` file with different warnings.
+   - Ran `parser.py` with `python parser.py doxygen.log`.
+   - Checked if `warnings.csv` contained the correct:
+     - Line number
+     - File name
+     - Warning message
+
+2. **Checked for Edge Cases**:
+   - **Non-standard lines**: Ensured they were ignored.
+   - **Empty file**: Verified the script handles it correctly.
+   - **Different warning formats**: Made sure they were parsed correctly.
+
+3. **Dependency Testing**:
+   - If any extra modules were required, they were included in `requirements.txt`.
+   - Verified `pip install -r requirements.txt` worked correctly.
+
+---
+
+## **3. RepoA-doc contains binaries. What is the advantage of using Git LFS?**
+Git LFS helps store large binary files efficiently in Git.  
+Instead of keeping large binaries directly in the repo, Git LFS stores pointers to large files and keeps the actual files on a remote server.
+
+### **Advantages:**
+ Reduces repo size, making `git clone` much faster.  
+ Prevents Git performance issues with large files.  
+ Avoids bloated commit history from frequent binary file updates.  
+ Better collaboration when working with large files (e.g., documentation, images, PDFs).
+
+## **4. How to adjust this repository to support Git LFS?**
+### **Step-by-step to enable Git LFS:**
+1. Install Git LFS (if not installed)**:
+git lfs instal
+
+2. Track large files (e.g., .tar.gz, .pdf, images):
+git lfs track "*.tar.gz"
+git lfs track "*.png"
+git lfs track "*.pdf"
+
+3. Commit the LFS configuration file:
+git add .gitattributes
+git commit -m "Enable Git LFS for large files"
+git push origin main
+
+4. Push your large files as usual:
+git add large_file.tar.gz
+git commit -m "Add large file with LFS"
+git push origin main
+
+
+## Other alternatives:
+Using an external storage service like AWS S3 or Google Drive for large files and linking them in the repository.
+Using a release management tool like GitHub Releases to store and distribute large files instead of keeping them in the repository.
