@@ -1,0 +1,98 @@
+pipeline {
+    agent any
+    environment {
+        GIT_REPO_A = 'https://github.com/Franckponvet/grpc.git'
+        GIT_REPO_C = 'https://github.com/Franckponvet/DoxygenLogParser.git'
+        DOXYGEN_CONFIG = 'Doxyfile'
+        DOXYGEN_LOG = 'doxygen.log'
+    }
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                echo 'Cleaning workspace...'
+                bat '''
+                if exist grpc rmdir /s /q grpc
+                if exist DoxygenLogParser rmdir /s /q DoxygenLogParser
+                '''
+            }
+        }
+
+        stage('Clone Repos') {
+            steps {
+                echo 'Cloning repositories...'
+                bat '''
+                git clone %GIT_REPO_A% grpc
+                git clone %GIT_REPO_C% DoxygenLogParser
+                '''
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                echo 'Installing dependencies...'
+                bat '''
+                choco install doxygen.install -y || echo "Doxygen already installed"
+                if exist DoxygenLogParser\\requirements.txt pip install -r DoxygenLogParser\\requirements.txt
+                '''
+            }
+        }
+
+        stage('Generate & Modify Doxygen Config') {
+            steps {
+                echo 'Generating Doxygen config file...'
+                bat '''
+                cd grpc
+                doxygen -g %DOXYGEN_CONFIG%
+                powershell -Command "(Get-Content %DOXYGEN_CONFIG%) -replace 'INPUT                  = .*', 'INPUT = src' | Set-Content %DOXYGEN_CONFIG%"
+                powershell -Command "(Get-Content %DOXYGEN_CONFIG%) -replace 'GENERATE_HTML          = NO', 'GENERATE_HTML = YES' | Set-Content %DOXYGEN_CONFIG%"
+                powershell -Command "(Get-Content %DOXYGEN_CONFIG%) -replace 'WARNINGS               = NO', 'WARNINGS = YES' | Set-Content %DOXYGEN_CONFIG%"
+                powershell -Command "(Get-Content %DOXYGEN_CONFIG%) -replace 'WARN_LOGFILE           =', 'WARN_LOGFILE = %DOXYGEN_LOG%' | Set-Content %DOXYGEN_CONFIG%"
+                '''
+            }
+        }
+
+        stage('Run Doxygen') {
+            steps {
+                echo 'Running Doxygen...'
+                bat '''
+                cd grpc
+                doxygen %DOXYGEN_CONFIG%
+                '''
+            }
+        }
+
+        stage('Run Log Parser') {
+            steps {
+                echo 'Parsing Doxygen log file...'
+                bat '''
+                cd DoxygenLogParser
+                python parser.py ../grpc/%DOXYGEN_LOG%
+                '''
+            }
+        }
+
+        stage('Pack Documentation') {
+            steps {
+                echo 'Packing documentation...'
+                bat '''
+                cd grpc
+                if exist html ("C:\\Program Files\\Git\\usr\\bin\\tar.exe" -czf doc.tar.gz html/) else (echo "ERROR: HTML documentation not found!" && exit 1)
+                '''
+            }
+        }
+
+        stage('Archive Artifacts') {
+            steps {
+                archiveArtifacts artifacts: 'grpc/doc.tar.gz', fingerprint: true
+            }
+        }
+    }
+    post {
+        success {
+            echo ' Task C Completed Successfully!'
+        }
+        failure {
+            echo ' Task C Failed. Check logs.'
+        }
+    }
+}
